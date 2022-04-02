@@ -2,12 +2,26 @@
 
 using System.Management;
 using ResticUInterface.Console;
+using ResticUInterface.Console.Configuration;
 using ResticUInterface.Console.Extensions;
 using ResticUInterface.Console.Model;
 
 
+var definitions = new []{
+    new BackupDefinition("Std", "TBJ6C6K21           "),
+    new BackupDefinition("Std2", "SGH3S6D1Y           ")
+};
+
 // var serialTodetect = "SGH3S6D1Y           ";
 var serialTodetect = "TBJ6C6K21           ";
+const string PathToRestic = @"D:\restic_0.12.1_windows_386\restic_0.12.1_windows_386.exe";
+const string RelativePathToRepository = "";
+
+var restic = new ResticHelper(new FileInfo(PathToRestic));
+var repositoryPassword = ReadPassword();
+await restic.CheckAsync("local:M:", repositoryPassword, true);
+
+
 Console.WriteLine("Detecting HDD");
 var disks = ReadDisks();
 foreach (var disk in disks)
@@ -39,10 +53,10 @@ if (volumeId != null)
     var vera = new VeraCryptHelper(new FileInfo(@"C:\Program Files\VeraCrypt\VeraCrypt.exe"));
     await vera.MountAsync(volumeId, 'M', password);
     
-    Console.WriteLine("Volumen mounted. Dismount with any key.");
-    Console.ReadKey();
-
-    await vera.DismountAsync('M', false);
+    // Console.WriteLine("Volumen mounted. Dismount with any key.");
+    // Console.ReadKey();
+    //
+    // await vera.DismountAsync('M', false);
 }
 
 static string ReadPassword()
