@@ -1,6 +1,40 @@
 ﻿using System.Management;
+using System.Reactive;
+using System.Reactive.Disposables;
+using System.Reactive.Linq;
 
 namespace ResticUInterface.Console.Interop;
+
+internal interface IDiskConfigurationChanged
+{
+    IObservable<Unit> CreateChangeNotificationStream();
+}
+
+internal class DiskConfigurationChanged : IDiskConfigurationChanged
+{
+    public IObservable<Unit> CreateChangeNotificationStream() => Observable.Create<Unit>(observer =>
+    {
+        var watcher = new ManagementEventWatcher();
+        var query = new WqlEventQuery("SELECT * FROM Win32_DeviceChangeEvent WHERE EventType=2");
+        watcher.EventArrived += WatcherOnEventArrived;
+        watcher.Query = query;
+        watcher.Start();
+
+        return Disposable.Create(() =>
+        {
+            watcher.Stop();
+            watcher.EventArrived -= WatcherOnEventArrived;
+            watcher.Dispose();
+        });
+
+        void WatcherOnEventArrived(object sender, EventArrivedEventArgs e)
+        {
+            if (e.NewEvent.ClassPath.Path != "Win32_SystemConfigurationChangeEvent") return;
+            
+            observer.OnNext(Unit.Default);
+        }
+    });
+}
 
 internal interface IDiskConfigurationReader
 {
@@ -53,7 +87,7 @@ internal class DiskConfigurationReader : IDiskConfigurationReader
         {
             var antecedent = drive["Antecedent"].ToString().Split('=')[1];
             var dependent = drive["Dependent"].ToString().Split('=')[1];
-            result.Add(new(antecedent.Trim('"'), dependent));
+            result.Add(new(antecedent.Trim('"'), dependent.Trim('"')));
         }
 
         return result;

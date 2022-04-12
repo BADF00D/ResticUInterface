@@ -1,6 +1,6 @@
 ﻿using System.Diagnostics;
 
-namespace ResticUInterface.Console;
+namespace ResticUInterface.Console.Interop;
 
 public class VeraCryptHelper
 {

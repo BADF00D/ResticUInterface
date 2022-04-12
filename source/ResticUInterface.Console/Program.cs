@@ -13,6 +13,26 @@ var definitions = new []{
     new BackupDefinition("Std2", "SGH3S6D1Y           ")
 };
 
+var configReader = new DiskConfigurationReader();
+
+var stream = new DiskConfigurationChanged().CreateChangeNotificationStream()
+    .Do(_ => Console.WriteLine("Reading disk"))
+    .Select(_ => configReader.Read())
+    .Do(disks =>
+    {
+        foreach (var disk in disks)
+        {
+            Console.WriteLine($"  {disk.Caption} {disk.Partitions.Length} partitions");
+            foreach (var diskPartition in disk.Partitions)
+            {
+                Console.WriteLine($"    {diskPartition.Name}({(diskPartition.VolumeLabel != null ? $"{diskPartition.VolumeLabel}" : string.Empty)}) {diskPartition.GetVeryCryptIdentifier()}");
+            }
+        }
+    })
+    .Subscribe();
+
+Console.WriteLine("Watcher started");
+Console.ReadLine();
 // var serialTodetect = "SGH3S6D1Y           ";
 var serialTodetect = "TBJ6C6K21           ";
 const string PathToRestic = @"C:\Tools\restic_0.13.0_windows_amd64.exe";

@@ -2,7 +2,7 @@
 using System.Reactive.Disposables;
 using System.Reactive.Linq;
 
-namespace ResticUInterface.Console;
+namespace ResticUInterface.Console.Interop;
 
 public class ResticHelper
 {
