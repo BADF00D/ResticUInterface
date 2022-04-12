@@ -1,6 +1,7 @@
 ﻿// See https://aka.ms/new-console-template for more information
 
 using System.Management;
+using System.Reactive.Linq;
 using ResticUInterface.Console;
 using ResticUInterface.Console.Configuration;
 using ResticUInterface.Console.Extensions;
@@ -14,13 +15,28 @@ var definitions = new []{
 
 // var serialTodetect = "SGH3S6D1Y           ";
 var serialTodetect = "TBJ6C6K21           ";
-const string PathToRestic = @"D:\restic_0.12.1_windows_386\restic_0.12.1_windows_386.exe";
-const string RelativePathToRepository = "";
+const string PathToRestic = @"C:\Tools\restic_0.13.0_windows_amd64.exe";
+// const string PathToRestic = @"D:\restic_0.12.1_windows_386\restic_0.12.1_windows_386.exe";
+const string RelativePathToRepository = "local:M:";
 
 var restic = new ResticHelper(new FileInfo(PathToRestic));
-var repositoryPassword = ReadPassword();
-await restic.CheckAsync("local:M:", repositoryPassword, true);
-
+var repositoryPassword = ReadPassword("Please enter repository password:");
+var output = await restic.CheckAsync(RelativePathToRepository, repositoryPassword, true)
+    .Do(@out =>
+    {
+        if (@out is ErrorOutput)
+        {
+            var old = Console.ForegroundColor;
+            Console.ForegroundColor = ConsoleColor.Red;
+            Console.WriteLine(@out.Message);
+            Console.ForegroundColor = old;
+        }
+        else
+        {
+            Console.WriteLine(@out.Message);
+        }
+        
+    });
 
 Console.WriteLine("Detecting HDD");
 var disks = ReadDisks();
@@ -44,23 +60,24 @@ var volumeId = disks
     .Select(p => p.GetVeryCryptIdentifier())
     .FirstOrDefault();
 
-if (volumeId != null)
-{
-    Console.WriteLine("Detected very crypt volume: "+volumeId);
-    Console.Write("Enter password: ");
-    // var password = Console.ReadLine();
-    var password = ReadPassword();
-    var vera = new VeraCryptHelper(new FileInfo(@"C:\Program Files\VeraCrypt\VeraCrypt.exe"));
-    await vera.MountAsync(volumeId, 'M', password);
-    
-    // Console.WriteLine("Volumen mounted. Dismount with any key.");
-    // Console.ReadKey();
-    //
-    // await vera.DismountAsync('M', false);
-}
+// if (volumeId != null)
+// {
+//     Console.WriteLine("Detected very crypt volume: "+volumeId);
+//     Console.Write("Enter password: ");
+//     // var password = Console.ReadLine();
+//     var password = ReadPassword("Please enter VeraCrypt password:");
+//     var vera = new VeraCryptHelper(new FileInfo(@"C:\Program Files\VeraCrypt\VeraCrypt.exe"));
+//     await vera.MountAsync(volumeId, 'M', password);
+//     
+//     // Console.WriteLine("Volumen mounted. Dismount with any key.");
+//     // Console.ReadKey();
+//     //
+//     // await vera.DismountAsync('M', false);
+// }
 
-static string ReadPassword()
+static string ReadPassword(string prompt)
 {
+    Console.WriteLine(prompt);
     var pass = string.Empty;
     ConsoleKey key;
     do

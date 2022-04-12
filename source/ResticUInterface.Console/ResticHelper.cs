@@ -1,4 +1,6 @@
 ﻿using System.Diagnostics;
+using System.Reactive.Disposables;
+using System.Reactive.Linq;
 
 namespace ResticUInterface.Console;
 
@@ -16,35 +18,94 @@ public class ResticHelper
         PathToRestic = pathToRestic;
     }
 
-    public Task CheckAsync(string pathToRepository, string password, bool readData)
+    public IObservable<ProcessOutput> CheckAsync(string pathToRepository, string password, bool readData)
     {
-        return RunCommandAsync($"-r \"{pathToRepository}\" check --password-command \"{password}\"");
+        return Observable.Create<ProcessOutput>(obs =>
+        {
+            var tmpFile = Path.GetTempFileName();
+            
+            File.WriteAllTextAsync(tmpFile, password);
+            
+            var subscription = RunCommandAsync($"-r \"{pathToRepository}\" check --password-file \"{tmpFile}\"", true)
+                .Subscribe(obs);
+            
+            return Disposable.Create(() =>
+            {
+                subscription.Dispose();
+                File.Delete(tmpFile);
+            });
+        });
     }
     
     
-    private async Task RunCommandAsync(string command)
+    private IObservable<ProcessOutput> RunCommandAsync(string command, bool killProcessOnDispose)
     {
-        var process = new Process
+        return Observable.Create<ProcessOutput>(async obs =>
         {
-            StartInfo = new ProcessStartInfo
+            var process = new Process
             {
-                WindowStyle = ProcessWindowStyle.Hidden,
-                FileName = PathToRestic.FullName,
-                Arguments = command,
-                RedirectStandardError = true,
-                RedirectStandardOutput = true
+                StartInfo = new ProcessStartInfo
+                {
+                    WindowStyle = ProcessWindowStyle.Hidden,
+                    FileName = PathToRestic.FullName,
+                    Arguments = command,
+                    RedirectStandardError = true,
+                    RedirectStandardOutput = true,
+                    UseShellExecute = false
+                }
+            };
+            
+            process.OutputDataReceived += ProcessOnOutputDataReceived;
+            process.ErrorDataReceived += ProcessOnErrorDataReceived;
+            process.EnableRaisingEvents = true;
+            
+            process.Start();
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
+
+            await process.WaitForExitAsync();
+            if (process.ExitCode != 0)
+            {
+                Cleanup(false);
+                var error = new Exception("Unexpected ExitCode: " + process.ExitCode);
+                obs.OnError(error);
             }
-        };
-        process.Start();
+            else
+            {
+                Cleanup(false);
+                obs.OnCompleted();
+            }
+            
+            return Disposable.Create(() =>
+            {
+                Cleanup(killProcessOnDispose);
+            });
 
-        await process.WaitForExitAsync();
+            void Cleanup(bool killProcess)
+            {
+                process.EnableRaisingEvents = false;
+                if (!process.HasExited && killProcess)
+                {
+                    process.Kill();
+                }
 
-        var error = await process.StandardError.ReadToEndAsync();
-        var output = await process.StandardOutput.ReadToEndAsync();
+                process.OutputDataReceived -= ProcessOnOutputDataReceived;
+                process.ErrorDataReceived -= ProcessOnErrorDataReceived;
+            }
 
-        if (process.ExitCode != 0)
-        {
-            throw new Exception("Unexpected ExitCode: " + process.ExitCode);
-        } 
+            void ProcessOnOutputDataReceived(object sender, DataReceivedEventArgs args)
+            {
+                obs.OnNext(new StdOutput(args.Data ?? string.Empty));
+            }
+            void ProcessOnErrorDataReceived(object sender, DataReceivedEventArgs args)
+            {
+                obs.OnNext(new ErrorOutput(args.Data ?? string.Empty));
+            }
+        });
+        
     }
 }
+
+public abstract record ProcessOutput(string Message);
+public record ErrorOutput(string Message): ProcessOutput(Message);
+public record StdOutput(string Message): ProcessOutput(Message);
