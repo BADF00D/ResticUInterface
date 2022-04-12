@@ -1,4 +1,4 @@
-﻿using ResticUInterface.Console.Model;
+﻿using ResticUInterface.Console.Interop;
 
 namespace ResticUInterface.Console.Extensions;
 
