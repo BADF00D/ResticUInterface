@@ -1,3 +1,3 @@
 ﻿namespace ResticUInterface.Console.Configuration;
 
-public record BackupDefinition(string Name, string Serial);
+public record BackupDefinition(string Name, string Serial, string VeraCryptMount);

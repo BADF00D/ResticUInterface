@@ -7,10 +7,17 @@ using ResticUInterface.Console.Configuration;
 using ResticUInterface.Console.Extensions;
 using ResticUInterface.Console.Interop;
 
+const string PathToRestic = @"C:\Tools\restic_0.13.0_windows_amd64.exe";
+// const string PathToRestic = @"D:\restic_0.12.1_windows_386\restic_0.12.1_windows_386.exe";
+const string RelativePathToRepository = "local:M:";
+const string PathToVeryCrypt = @"C:\Program Files\VeraCrypt\VeraCrypt.exe";
+
+var veraCryptPassword = Environment.GetCommandLineArgs()[1];
+var resticPassword = Environment.GetCommandLineArgs()[2];
 
 var definitions = new []{
-    new BackupDefinition("Std", "TBJ6C6K21           "),
-    new BackupDefinition("Std2", "SGH3S6D1Y           ")
+    new BackupDefinition("Std", "TBJ6C6K21           ", @"\Device\Harddisk1\Partition2"),
+    new BackupDefinition("Std2", "SGH3S6D1Y           ", string.Empty)
 };
 
 var configReader = new DiskConfigurationReader();
@@ -18,7 +25,7 @@ var configReader = new DiskConfigurationReader();
 var stream = new DiskConfigurationChanged().CreateChangeNotificationStream()
     .Do(_ => Console.WriteLine("Reading disk"))
     .Select(_ => configReader.Read())
-    .Do(disks =>
+    .Do(async disks =>
     {
         foreach (var disk in disks)
         {
@@ -28,16 +35,37 @@ var stream = new DiskConfigurationChanged().CreateChangeNotificationStream()
                 Console.WriteLine($"    {diskPartition.Name}({(diskPartition.VolumeLabel != null ? $"{diskPartition.VolumeLabel}" : string.Empty)}) {diskPartition.GetVeryCryptIdentifier()}");
             }
         }
+        
+        var partitionsToMound = disks
+            .Select(d => (d, definitions.Where(backup => backup.Serial == d.Serial).ToArray()))
+            .Where(tpl => tpl.Item2.Length == 1)//this can be changed in future to support multiple backup partitions
+            .SelectMany(tpl =>
+            {
+                return tpl.d.Partitions.Select(p
+                    => tpl.Item2.FirstOrDefault(bd => bd.VeraCryptMount == p.GetVeryCryptIdentifier()));
+            })
+            .Where(bd => bd != null)
+            .ToArray();
+        var veraCrypt = new VeraCryptHelper(new FileInfo(PathToVeryCrypt));
+        var restic = new ResticHelper(new FileInfo(PathToRestic));
+        foreach (var disk in partitionsToMound)
+        {
+            Console.WriteLine("Mount");
+            await veraCrypt.MountAsync(disk.VeraCryptMount, 'Y', veraCryptPassword);
+            Console.WriteLine("Check");
+            await restic.CheckAsync(@"Y:\", resticPassword, false)
+                .Do(@out => Console.WriteLine(@out.Message));
+        }
+        
     })
+    
     .Subscribe();
 
 Console.WriteLine("Watcher started");
 Console.ReadLine();
 // var serialTodetect = "SGH3S6D1Y           ";
 var serialTodetect = "TBJ6C6K21           ";
-const string PathToRestic = @"C:\Tools\restic_0.13.0_windows_amd64.exe";
-// const string PathToRestic = @"D:\restic_0.12.1_windows_386\restic_0.12.1_windows_386.exe";
-const string RelativePathToRepository = "local:M:";
+
 
 var restic = new ResticHelper(new FileInfo(PathToRestic));
 var repositoryPassword = ReadPassword("Please enter repository password:");

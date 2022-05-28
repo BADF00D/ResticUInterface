@@ -26,7 +26,8 @@ public class ResticHelper
             
             File.WriteAllTextAsync(tmpFile, password);
             
-            var subscription = RunCommandAsync($"-r \"{pathToRepository}\" check --password-file \"{tmpFile}\"", true)
+            //why are the arguments ignored?
+            var subscription = RunCommandAsync($"-r \"{pathToRepository}\" check --password-file \"{tmpFile}\"", readData)
                 .Subscribe(obs);
             
             return Disposable.Create(() =>
@@ -38,17 +39,17 @@ public class ResticHelper
     }
     
     
-    private IObservable<ProcessOutput> RunCommandAsync(string command, bool killProcessOnDispose)
+    private IObservable<ProcessOutput> RunCommandAsync(string arguments, bool killProcessOnDispose)
     {
+        System.Console.WriteLine($"{PathToRestic} {arguments}");
         return Observable.Create<ProcessOutput>(async obs =>
         {
             var process = new Process
             {
-                StartInfo = new ProcessStartInfo
+                StartInfo = new ProcessStartInfo(PathToRestic.FullName, arguments)
                 {
                     WindowStyle = ProcessWindowStyle.Hidden,
-                    FileName = PathToRestic.FullName,
-                    Arguments = command,
+                    CreateNoWindow = true,
                     RedirectStandardError = true,
                     RedirectStandardOutput = true,
                     UseShellExecute = false
